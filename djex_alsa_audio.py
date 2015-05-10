@@ -12,14 +12,15 @@ class DjexAlsaAudio():
         self.config = config
 
     def initaudio(self):
-        input = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
-        input.setchannels(2)
-        input.setrate(44000)
-        input.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-        input.setperiodsize(160)
+        self.input = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
+        self.input.setchannels(1)
+        self.input.setrate(44000)
+        self.input.setformat(alsaaudio.PCM_FORMAT_S16_LE)
+        self.input.setperiodsize(160)
 
     def main(self):
-        l, data = input.read()
-        if l:
-            self.rms = audioop.rms(data, 2)
+        if self.input and hasattr(self.input, 'read'):
+            l, data = self.input.read()
+            if l:
+                self.rms = audioop.rms(data, self.config["rmswinsize"])
         time.sleep(.001)
