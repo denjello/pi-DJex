@@ -2,10 +2,14 @@ import argparse
 import atexit
 import sys
 import logging
+import time
+import threading
 
 import djex_config
 import djex_alsa_audio
+#import djex_dummy_audio
 import djex_pi_gpio
+#import djex_dummy_gpio
 
 if __name__ == "__main__":
 
@@ -64,7 +68,8 @@ if __name__ == "__main__":
 
     logging.debug('Initializing ALSA audio')
 
-    audio = djex_alsa_audio.DjexAlsaAudio()
+    audio = djex_alsa_audio.DjexDummyAudio()
+    #audio = djex_dummy_audio.DjexDummyAudio()
     audio.configure(config.data)
     audio.initaudio()
 
@@ -75,20 +80,28 @@ if __name__ == "__main__":
     logging.debug('Initializing GPIO')
 
     gpio = djex_pi_gpio.DjexPiGpio()
+    #gpio = djex_dummy_gpio.DjexDummyGpio()
     gpio.setup(config.data)
     atexit.register(gpio.cleanup)
 
     #
     #
-    # Main loop
+    # Main
+
+    def update_audio():
+        while True:
+            audio.main()
+
+    to = threading.Thread(target=update_audio)
+    to.start()
 
     while True:
         if config.update():
             logging.debug('Updating config')
             audio.configure(config.data)
-        audio.main()
         if audio.rms >= config.data["threshold"]:
             gpio.send_warning()
+        time.sleep(0.1)
 
 
 
