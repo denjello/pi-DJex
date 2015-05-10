@@ -4,6 +4,8 @@ import sys
 import logging
 import time
 import threading
+import signal
+import pprint
 
 import djex_config
 import djex_alsa_audio
@@ -18,7 +20,7 @@ if __name__ == "__main__":
     # Get the command line args
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--log", default='INFO', help="specify log level")
+    parser.add_argument("--log", default="WARN", help="specify log level")
     parser.add_argument("--config", type=bool, default=False, help="only update config db, do not start service")
     parser.add_argument("--threshold", type=int, help="db threshold")
     parser.add_argument("--rmswinsize", type=int, help="size for rms sampling window")
@@ -31,7 +33,9 @@ if __name__ == "__main__":
     numeric_level = getattr(logging, args.log.upper(), None)
 
     if not isinstance(numeric_level, int):
-        raise ValueError('invalid log level: %s' % args.log)
+        raise ValueError('Invalid log level: %s' % args.log)
+
+    pp = pprint.PrettyPrinter(indent=4)
 
     logging.basicConfig(level=numeric_level)
 
@@ -39,7 +43,7 @@ if __name__ == "__main__":
     #
     # Initialize config
 
-    logging.debug('Initializing config')
+    logging.info('Initializing config')
 
     config = djex_config.DjexConfig()
     config.update()
@@ -57,6 +61,9 @@ if __name__ == "__main__":
     if dump_config:
         config.dump()
 
+    logging.debug('Dumping current config')
+    logging.debug(pp.pformat(config.data))
+
     # Exit if --config switch set
 
     if args.config:
@@ -66,9 +73,9 @@ if __name__ == "__main__":
     #
     # Setup ALSA audio
 
-    logging.debug('Initializing ALSA audio')
+    logging.info('Initializing ALSA audio')
 
-    audio = djex_alsa_audio.DjexDummyAudio()
+    audio = djex_alsa_audio.DjexAlsaAudio()
     #audio = djex_dummy_audio.DjexDummyAudio()
     audio.configure(config.data)
     audio.initaudio()
@@ -77,7 +84,7 @@ if __name__ == "__main__":
     #
     # Setup GPIO
 
-    logging.debug('Initializing GPIO')
+    logging.info('Initializing GPIO')
 
     gpio = djex_pi_gpio.DjexPiGpio()
     #gpio = djex_dummy_gpio.DjexDummyGpio()
@@ -86,22 +93,45 @@ if __name__ == "__main__":
 
     #
     #
-    # Main
+    # Threads
 
     def update_audio():
         while True:
             audio.main()
 
-    to = threading.Thread(target=update_audio)
-    to.start()
+    audio_thread = threading.Thread(target=update_audio)
+    audio_thread.daemon = True
+    audio_thread.start()
+
+    def update_config():
+        while True:
+            if config.update():
+                logging.info('Config was updated')
+                logging.debug('Dumping current config')
+                logging.debug(pp.pformat(config.data))
+                audio.configure(config.data)
+            time.sleep(1)
+
+    config_thread = threading.Thread(target=update_config)
+    config_thread.daemon = True
+    config_thread.start()
+
+    #
+    #
+    # Signal handler
+
+    def signal_handler(signal, frame):
+        logging.debug('Caught signal')
+        logging.debug(pp.pformat(signal))
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    #
+    #
+    # Main loop
 
     while True:
-        if config.update():
-            logging.debug('Updating config')
-            audio.configure(config.data)
         if audio.rms >= config.data["threshold"]:
             gpio.send_warning()
-        time.sleep(0.1)
-
-
-
+        time.sleep(.1)
