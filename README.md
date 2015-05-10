@@ -6,11 +6,11 @@ Python script for detecting the live audio input's RMS value and triggering a wa
 
 ```shell
 # run the service
-python ./pi-djex.py
+./pi-djex.py
 
 # only update config without running service (if service is running in background)
-python ./pi-djex.py --config --threshold=80
+./pi-djex.py --config --threshold=80
 
 # get an overview of configuration options
-python ./pi-djex.py --help
+./pi-djex.py --help
 ```
